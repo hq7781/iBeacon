@@ -2,14 +2,14 @@
 //  ViewController.m
 //  iBeaconPeripheral
 //
-//  Created by HongQuan on 2014/11/17.
+//  Created by Roan Hong on 2017/10/23.
 //  Copyright (c) 2017年 kenkou All rights reserved.
 //
 
 #import "ViewController.h"
 
-#define PROXIMITY_UUID @"913C64F0-9886-4FC3-B11C-78581F21CDB4"
-#define IDENTIFIER @"iBeacon text"
+#define PROXIMITY_UUID @"05EC5ED2-300C-4ED9-A204-F4C3FC7DB7A1"
+#define BEACON_IDENTIFER @"com.kenkou.ibeaconcentral"
 #define MAJOR 1
 #define MINER 1
 #define MEASURED_POWER -51.0f
@@ -70,7 +70,7 @@
     
     // Beacon情報初期設定
     self.proximityUUID = [[NSUUID alloc] initWithUUIDString:PROXIMITY_UUID];
-    self.identifier = IDENTIFIER;
+    self.identifier = BEACON_IDENTIFER;
     self.major = (CLBeaconMajorValue)MAJOR;
     self.minor = (CLBeaconMinorValue)MINER;
     self.measuredPower = [NSNumber numberWithFloat:MEASURED_POWER];

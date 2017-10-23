@@ -7,19 +7,26 @@
 //
 
 #import <Foundation/Foundation.h>
+#if (SURPPORT_LIKING)
 #import <LinkingLibrary/LinkingLibrary.h>
-
+#endif
 @protocol SelectDeviceDelegate <NSObject>
 
 @optional
 //アドバタイズの受信を通知する
 -(void)advertisementReceive;
 @end
-
+#if (SURPPORT_LIKING)
 @interface SelectDevice : NSObject<BLEConnecterDelegate>
+#else
+@interface SelectDevice : NSObject
+#endif
 
+#if (SURPPORT_LIKING)
 @property (nonatomic)BLEDeviceSetting *device;
 @property (nonatomic,)CBPeripheral *peripheral;
+#endif
+
 @property (nonatomic) BOOL beaconMode;
 @property (nonatomic) NSMutableArray *advertisementArray;
 @property (nonatomic) NSMutableDictionary *advertisementDic;

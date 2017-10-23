@@ -2,21 +2,29 @@
 //  ViewController.m
 //  iBeaconCentral
 //
-//  Created by Takahiro on 2014/04/12.
+//  Created by Roan Hong on 2017/10/23.
 //  Copyright (c) 2014年 kenkou All rights reserved.
 //
 
 #import "ViewController.h"
 #import "SelectDevice.h"
+
+#if (SURPPORT_LIKING)
 #import <LinkingLibrary/LinkingLibrary.h>
+#endif
 
-#define PROXIMITY_UUID @"913C64F0-9886-4FC3-B11C-78581F21CDB4"
+#define PROXIMITY_UUID @"05EC5ED2-300C-4ED9-A204-F4C3FC7DB7A1"
+#define DEVICE_NAME @"Tomoru0099999"
 #define BEACON_IDENTIFER @"com.kenkou.ibeaconcentral"
-
-@interface ViewController () <BLEConnecterDelegate, BLEDelegateModelDelegate>{
+#if (SURPPORT_LIKING)
+@interface ViewController () <BLEConnecterDelegate, BLEDelegateModelDelegate
+, UITableViewDelegate, UITableViewDataSource >{
  BLEConnecter *bleConnecter;
  BOOL isScanning;
 }
+#else
+@interface ViewController ()
+#endif
 
 @property (strong, nonatomic) IBOutlet CLLocationManager *locationManager;
 @property (strong, nonatomic) IBOutlet NSUUID *proximityUUID;
@@ -28,12 +36,30 @@
 @property (weak, nonatomic) IBOutlet UITableView *mTableView;
 @property (nonatomic) NSMutableArray *deviceArray;
 
+//////////////////////////
+@property (weak, nonatomic) IBOutlet UILabel *mDeviceName;
+@property (weak, nonatomic) IBOutlet UILabel *mDate;
+@property (weak, nonatomic) IBOutlet UILabel *mHeaderIdentifier;
+@property (weak, nonatomic) IBOutlet UILabel *mIndividualNumber;
+@property (weak, nonatomic) IBOutlet UILabel *mServiceID;
+@property (weak, nonatomic) IBOutlet UILabel *mDistanceInfo;
+@property (weak, nonatomic) IBOutlet UILabel *mVersion;
+@property (weak, nonatomic) IBOutlet UILabel *mRSSI;
+@property (weak, nonatomic) IBOutlet UILabel *mTxPowerLevel;
+@property (weak, nonatomic) IBOutlet UILabel *mServiceData;
+@property (weak, nonatomic) IBOutlet UILabel *mTemperature;
+@property (weak, nonatomic) IBOutlet UILabel *mHumidity;
+@property (weak, nonatomic) IBOutlet UILabel *mAtosphericPressure;
+@property (weak, nonatomic) IBOutlet UILabel *mIsChargingRequired;
+///////////////////////////
+
+@property (nonatomic) BOOL isStartPartialScanDevice;
+
 @end
 
 @implementation ViewController 
-
-- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
-{
+#define CellIdentifier @"deviceviewcell"
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         // Custom initialization
@@ -41,13 +67,19 @@
     return self;
 }
 
-- (void)viewDidLoad
-{
+- (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view from its nib.
     
     self.title = @"iBeacon Central";
-    self.view.backgroundColor = [UIColor blueColor];
+    self.view.backgroundColor = [UIColor lightGrayColor];
+    UINib *nib = [UINib nibWithNibName:@"DeviceViewCell" bundle:nil];
+    [self.mTableView registerNib:nib forCellReuseIdentifier:CellIdentifier];
+    
+    self.isStartPartialScanDevice = NO;
+    self.mTableView.delegate = self;
+    self.mTableView.dataSource = self;
+    self.deviceArray = [NSMutableArray new];
     
     if ([CLLocationManager isMonitoringAvailableForClass:[CLCircularRegion class]]) {
         self.locationManager = [[CLLocationManager alloc] init];
@@ -76,64 +108,41 @@
                                               otherButtonTitles:@"OK", nil];
         [alert show];
     }
-    
+#if (SURPPORT_LIKING)
     // BLEConnecterクラスのインスタンス生成
     bleConnecter = [BLEConnecter sharedInstance];
     // デリゲートの登録 ※ペリフェラルを指定したい場合はdeviceUUIDを指定
     [bleConnecter addListener:self deviceUUID:nil];
+#endif
 }
 - (void) dealloc {
+#if (SURPPORT_LIKING)
     [[BLEConnecter sharedInstance] removeListener:self deviceUUID:nil];
+#endif
 }
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
 }
+
 /////////////////////////////////////////
-//インデックスパスを取得
-- (NSIndexPath *)indexPathForCellContainingView:(UIView *)view {
-    while (view != nil) {
-        if ([view isKindOfClass:[UITableViewCell class]]) {
-            return [self.mTableView indexPathForCell:(UITableViewCell *)view];
-        } else {
-            view = [view superview];
-        }
-    }
-    return nil;
-}
-//UIスイッチの変更を監視
--(void)switchChanged:(UISwitch *)switchBtn {
-    
-    NSIndexPath *indexPath = [self indexPathForCellContainingView:switchBtn];
-    if(indexPath.row >= 0 && indexPath.row<self.deviceArray.count){
-        BLEDeviceSetting *device = [self.deviceArray objectAtIndex:indexPath.row];
-        if(switchBtn.on){
-            //デバイスを登録
-            [SelectDevice sharedInstance].device = device;
-        }else{
-            //デバイスを削除
-            [bleConnecter disconnectByDeviceUUID:device.peripheral.identifier.UUIDString];
-            [SelectDevice sharedInstance].beaconMode = NO;
-            [SelectDevice sharedInstance].device = nil;
-        }
-    }
-    
-    [self.mTableView reloadData];
-}
-#pragma mark - <UITableViewDelegate> methods
+#pragma mark - <UITableViewDelegate, UITableViewDataSource > methods
 -(NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
     return 1;
 }
 
 -(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
-    
     return [self.deviceArray count];
 }
 
 -(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
-    
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"deviceItemcell"];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    if (!cell) {
+        NSLog(@"cell is nil!");
+        return nil;
+    }
     UILabel *nameLabel = (UILabel *)[cell viewWithTag:1];
+#if (SURPPORT_LIKING)
     BLEDeviceSetting *device = [self.deviceArray objectAtIndex:indexPath.row];
     NSString *deviceName = device.name;
     if([deviceName length] == 0){
@@ -141,10 +150,10 @@
     }
     nameLabel.text = deviceName;
     UISwitch *switchBtn = [cell viewWithTag:2];
+    switchBtn.hidden = YES; // for debug
     [switchBtn addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     
-    
-    if([[SelectDevice sharedInstance].device.peripheral.identifier.UUIDString isEqualToString:device.peripheral.identifier.UUIDString]){
+    if ([[SelectDevice sharedInstance].device.peripheral.identifier.UUIDString isEqualToString:device.peripheral.identifier.UUIDString]){
         switchBtn.on = YES;
     }else{
         switchBtn.on = NO;
@@ -153,39 +162,55 @@
             [SelectDevice sharedInstance].beaconMode = NO;
         }
     }
-    
+#endif //(SURPPORT_LIKING)
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    // cellがタップされた際の処理
 }
 
 #pragma mark - <CLLocationManagerDelegate> methods
 // 領域計測が開始した場合
-- (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region
-{
-    [self sendLocalNotificationForMessage:@"Start Monitoring Region"];
+- (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
+    NSString *message = [NSString stringWithFormat: @"[%@]: Start Monitoring Region",[self getCurrentDateString]];
+    [self sendLocalNotificationForMessage:message];
+#if (SURPPORT_LIKING)
+    // set scan Linking device flag
+    [self scanStartBeaconLinking];
+#endif
 }
 
 // 指定した領域に入った場合
-- (void)locationManager:(CLLocationManager *)manager didEnterRegion:(CLRegion *)region
-{
-    [self sendLocalNotificationForMessage:@"Enter Region"];
+- (void)locationManager:(CLLocationManager *)manager didEnterRegion:(CLRegion *)region {
+    NSString *message = [NSString stringWithFormat: @"[%@]: Enter Region: %@",
+                         [self getCurrentDateString],
+                         region.identifier];
+    [self sendLocalNotificationForMessage:message];
     
     if ([region isMemberOfClass:[CLBeaconRegion class]] && [CLLocationManager isRangingAvailable]) {
         [self.locationManager startRangingBeaconsInRegion:(CLBeaconRegion *)region];
     }
+#if (SURPPORT_LIKING)
     // set scan Linking device flag
-    [self setLinkingScanStart];
+    [self scanStartBeaconLinking];
+#endif
 }
 
 // 指定した領域から出た場合
-- (void)locationManager:(CLLocationManager *)manager didExitRegion:(CLRegion *)region
-{
-    [self sendLocalNotificationForMessage:@"Exit Region"];
+- (void)locationManager:(CLLocationManager *)manager didExitRegion:(CLRegion *)region {
+    NSString *message = [NSString stringWithFormat: @"[%@]: Exit Region:%@",
+                           [self getCurrentDateString],
+                           region.identifier];
+    [self sendLocalNotificationForMessage:message];
     
     if ([region isMemberOfClass:[CLBeaconRegion class]] && [CLLocationManager isRangingAvailable]) {
         [self.locationManager stopRangingBeaconsInRegion:(CLBeaconRegion *)region];
     }
+#if (SURPPORT_LIKING)
     // set scan Linking device flag
-    [self setLinkingScanStop];
+    //[self scanStopBeaconLinking];
+#endif
 }
 
 -(void)locationManager:(CLLocationManager *)manager didDetermineState:(CLRegionState)state forRegion:(CLRegion *)region{
@@ -194,7 +219,14 @@
             if([region isMemberOfClass:[CLBeaconRegion class]] && [CLLocationManager isRangingAvailable]){
                 NSLog(@"Enter %@",region.identifier);
                 //Beacon の範囲内に入った時に行う処理を記述する
-                [self sendLocalNotificationForMessage:@"Already Entering"];
+                NSString * message = [NSString stringWithFormat: @"[%@]: Already Entering: %@",
+                                       [self getCurrentDateString],
+                                       region.identifier];
+                [self sendLocalNotificationForMessage:message];
+#if (SURPPORT_LIKING)
+                // set scan Linking device flag
+                [self scanStartBeaconLinking];
+#endif
             }
             break;
 
@@ -206,12 +238,9 @@
 }
 
 // Beacon信号を検出した場合
-- (void)locationManager:(CLLocationManager *)manager didRangeBeacons:(NSArray *)beacons inRegion:(CLBeaconRegion *)region
-{
+- (void)locationManager:(CLLocationManager *)manager didRangeBeacons:(NSArray *)beacons inRegion:(CLBeaconRegion *)region {
     if (beacons.count > 0) {
-        //CLBeacon *nearestBeacon = beacons.firstObject;
         self.nearestBeacon = beacons.firstObject;
-        
         NSString *rangeMessage;
         
         switch (self.nearestBeacon.proximity) {
@@ -228,21 +257,22 @@
                 rangeMessage = @"Range Unknown";
                 break;
         }
-        
-        self.str = [[NSString alloc] initWithFormat:@"%f [m]", self.nearestBeacon.accuracy];
+        self.str = [NSString stringWithFormat: @"[%@]: %@. Distance: %f [m]: %@",
+                     [self getCurrentDateString],
+                     rangeMessage,
+                     self.nearestBeacon.accuracy,
+                     region.identifier];
         NSLog(@"%@", self.str);
-        [self sendLocalNotificationForMessage:self.str];
     }
 }
 
 // 領域観測に失敗した場合
-- (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error
-{
-    [self sendLocalNotificationForMessage:@"Exit Region"];
+- (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error {
+    NSString * message = [NSString stringWithFormat: @"%@: Exit Region",[self getCurrentDateString]];
+    [self sendLocalNotificationForMessage:message];
 }
 
-- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status
-{
+- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
     if (status == kCLAuthorizationStatusNotDetermined) {
         // ユーザが位置情報の使用を許可していない
     } else if(status == kCLAuthorizationStatusAuthorizedAlways) {
@@ -259,35 +289,222 @@
 
 #pragma mark - Private methods
 
-- (void)sendLocalNotificationForMessage:(NSString *)message
-{
+#pragma mark - Send Local Notification
+//ローカルメッセージ送信
+- (void)sendLocalNotificationForMessage:(NSString *)message {
     UILocalNotification *localNotification = [UILocalNotification new];
     localNotification.alertBody = message;
     localNotification.fireDate = [NSDate date];
     localNotification.soundName = UILocalNotificationDefaultSoundName;
     [[UIApplication sharedApplication] scheduleLocalNotification:localNotification];
 }
+//現在の時間文字列取得
+- (NSString*) getCurrentDateString {
+    NSDate *date = [NSDate date];
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    [formatter setDateFormat:@"yyyy/MM/dd HH:mm:ss"];
+    return [NSString stringWithFormat: @"%@",[formatter stringFromDate:date]];
+}
+//インデックスパスを取得
+- (NSIndexPath *)indexPathForCellContainingView:(UIView *)view {
+    while (view != nil) {
+        if ([view isKindOfClass:[UITableViewCell class]]) {
+            return [self.mTableView indexPathForCell:(UITableViewCell *)view];
+        } else {
+            view = [view superview];
+        }
+    }
+    return nil;
+}
+//UIスイッチの変更を監視
+-(void)switchChanged:(UISwitch *)switchBtn {
+    NSIndexPath *indexPath = [self indexPathForCellContainingView:switchBtn];
+#if (SURPPORT_LIKING)
+    if(indexPath.row >= 0 && indexPath.row<self.deviceArray.count){
+        BLEDeviceSetting *device = [self.deviceArray objectAtIndex:indexPath.row];
+        if(switchBtn.on){
+            //デバイスを登録
+            [SelectDevice sharedInstance].device = device;
+        }else{
+            //デバイスを削除
+            [bleConnecter disconnectByDeviceUUID:device.peripheral.identifier.UUIDString];
+            [SelectDevice sharedInstance].beaconMode = NO;
+            [SelectDevice sharedInstance].device = nil;
+        }
+    }
+#endif
+    [self.mTableView reloadData];
+}
 
+#if (SURPPORT_LIKING)
 #pragma mark - Linking methods Private methods
-- (void)setLinkingScanStart {
+// for Linking Beacon
+- (void)scanStartBeaconLinking {
+    if (!self.isStartPartialScanDevice) {
+        self.title = @"Beacon scanning";
+        NSLog(@"%@: %s ■ビーコンのスキャンを開始しました。",[self getCurrentDateString],__FUNCTION__);
+        [bleConnecter startPartialScanDevice];
+    }
+}
+- (void)scanStopBeaconLinking {
+    self.isStartPartialScanDevice = NO;
+    // デバイス検索を停止する
+    [bleConnecter stopPartialScanDevice];
+    self.title = @"iBeacon Central";
+    NSLog(@"%@: %s ■ビーコンのスキャンを停止しました。",[self getCurrentDateString],__FUNCTION__);
+}
+#pragma mark - <BLEDelegateModelDelegate> methods Beacon Linking
+// ビーコンスキャン開始通知
+- (void)startPartialScanDelegate {
+    self.isStartPartialScanDevice = true;
+    NSLog(@"ビーコンスキャン開始通知");
+}
+
+// ビーコンスキャンのタイムアウトの通知
+- (void)partialScanTimeOutDelegate {
+    NSLog(@"%s() ビーコンスキャンのタイムアウト",__FUNCTION__);
+}
+
+// ビーコンスキャンのBluetooth接続エラー通知
+- (void)connectBluetoothWhenPartialScanError:(NSError *)error {
+    NSLog(@"%s() ビーコンスキャンのBluetooth接続エラー通知",__FUNCTION__);
+}
+
+// ビーコンスキャン開始時のBluetooth接続エラー通知
+- (void)connectBluetoothWhenStartPartialScanError:(NSError *)error{
+    NSLog(@"%s() ビーコンスキャン開始時のBluetooth接続エラー通知",__FUNCTION__);
+}
+
+// アドバタイズ受信通知
+- (void)receivedAdvertisement:(CBPeripheral*)peripheral advertisement:(NSDictionary*)data {
+    NSLog(@"%@: %s ■ビーコンのスキャン受信されました。",[self getCurrentDateString],__FUNCTION__);
+
+    if (![self filterDevice: peripheral withName: DEVICE_NAME]) return;
+    
+    [self scanStopBeaconLinking];
+    [self updateDeviceArrayByPeripheral:peripheral];
+    [self updateDeviceInfoUI:peripheral with: data];
+    //[self outputToNSLogDeviceInfo:peripheral with: data];
+}
+
+- (BOOL)filterDevice:(CBPeripheral*)peripheral withName:(NSString*) DeviceName {
+    if ([DeviceName isEqualToString:peripheral.name]) {
+       return YES;
+    }
+    //スキャン結果
+    if (![self hadInDeviceArray:peripheral.identifier.UUIDString]) {
+        BLEDeviceSetting *device = [bleConnecter getDeviceByPeripheral:peripheral];
+        device.inDistanceThreshold = YES;
+        if (device != nil) {
+            [self.deviceArray addObject:device];
+            [self.mTableView reloadData];
+        }
+    }
+    return NO;
+}
+
+- (void)updateDeviceInfoUI:(CBPeripheral*)peripheral with: (NSDictionary*) data {
+    NSDate *date = [data objectForKey:@"date"];
+    long headerIdentifier = [[data objectForKey:@"headerIdentifier"]longValue];
+    long individualNumber = [[data objectForKey:@"individualNumber"]longValue];
+    long serviceID = [[data objectForKey:@"serviceID"]longValue];
+    float distanceInformation = [[data objectForKey:@"distanceInformation"]floatValue];
+    long version = [[data objectForKey:@"version"]longValue];
+    NSNumber *rssi = [data objectForKey:@"rssi"];
+    float txPowerLevel = [[data objectForKey:@"txPowerLevel"]floatValue];
+    long serviceData = [[data objectForKey:@"serviceData"]longValue];
+    float temperature = [[data objectForKey:@"temperature"]floatValue];
+    float humidity = [[data objectForKey:@"humidity"]floatValue];
+    float atmosphericPressure = [[data objectForKey:@"atmosphericPressure"]floatValue];
+    BOOL isChargingRequired = [[data objectForKey:@"isChargingRequired"]boolValue];
+    float remainingPercentage = [[data objectForKey:@"remainingPercentage"]floatValue];
+    short buttonIdentifier = [[data objectForKey:@"buttonIdentifier"]shortValue];
+    BOOL isOpen = [[data objectForKey:@"isOpen"]boolValue];
+    BOOL isHuman = [[data objectForKey:@"isHuman"]boolValue];
+    BOOL isVibration = [[data objectForKey:@"isVibration"]boolValue];
+    
+    self.mDeviceName.text = [NSString stringWithFormat:@"device : %@", peripheral.name];
+    self.mDate.text = [NSString stringWithFormat:@"date : %@", date];
+    self.mHeaderIdentifier.text = [NSString stringWithFormat:@"headerIdentifier : %ld", headerIdentifier];
+    self.mIndividualNumber.text = [NSString stringWithFormat:@"individualNumber : %ld", individualNumber];
+    self.mServiceID.text = [NSString stringWithFormat:@"serviceID : %ld", serviceID];
+    self.mDistanceInfo.text = [NSString stringWithFormat:@"distanceInformation : %f m", distanceInformation];
+    self.mVersion.text = [NSString stringWithFormat:@"version : %ld", version];
+    self.mRSSI.text = [NSString stringWithFormat:@"RSSI : %@", rssi];
+    self.mTxPowerLevel.text = [NSString stringWithFormat:@"txPowerLevel : %f", txPowerLevel];
+    self.mServiceData.text = [NSString stringWithFormat:@"serviceData : %ld", serviceData];
+    self.mTemperature.text = [NSString stringWithFormat:@"temperature : %f", temperature];
+    self.mHumidity.text = [NSString stringWithFormat:@"humidity : %f", humidity];
+    self.mAtosphericPressure.text = [NSString stringWithFormat:@"atmosphericPressure : %f", atmosphericPressure];
+    self.mIsChargingRequired.text = [NSString stringWithFormat:@"isChargingRequired : %@", isChargingRequired ? @"YES" : @"NO"];
+};
+
+-(void) outputToNSLogDeviceInfo:(CBPeripheral*)peripheral with: (NSDictionary*) data{
+    NSDate *date = [data objectForKey:@"date"];
+    long headerIdentifier = [[data objectForKey:@"headerIdentifier"]longValue];
+    long individualNumber = [[data objectForKey:@"individualNumber"]longValue];
+    long serviceID = [[data objectForKey:@"serviceID"]longValue];
+    float distanceInformation = [[data objectForKey:@"distanceInformation"]floatValue];
+    long version = [[data objectForKey:@"version"]longValue];
+    NSNumber *rssi = [data objectForKey:@"rssi"];
+    float txPowerLevel = [[data objectForKey:@"txPowerLevel"]floatValue];
+    long serviceData = [[data objectForKey:@"serviceData"]longValue];
+    float temperature = [[data objectForKey:@"temperature"]floatValue];
+    float humidity = [[data objectForKey:@"humidity"]floatValue];
+    float atmosphericPressure = [[data objectForKey:@"atmosphericPressure"]floatValue];
+    BOOL isChargingRequired = [[data objectForKey:@"isChargingRequired"]boolValue];
+    float remainingPercentage = [[data objectForKey:@"remainingPercentage"]floatValue];
+    short buttonIdentifier = [[data objectForKey:@"buttonIdentifier"]shortValue];
+    BOOL isOpen = [[data objectForKey:@"isOpen"]boolValue];
+    BOOL isHuman = [[data objectForKey:@"isHuman"]boolValue];
+    BOOL isVibration = [[data objectForKey:@"isVibration"]boolValue];
+
+    NSLog(@">>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    NSLog(@"device : %@", peripheral.name);
+    NSLog(@"date : %@", date);
+    NSLog(@"headerIdentifier : %ld", headerIdentifier);
+    NSLog(@"individualNumber : %ld", individualNumber);
+    NSLog(@"serviceID : %ld", serviceID);
+    NSLog(@"distanceInformation : %f", distanceInformation);
+    NSLog(@"version : %ld", version);
+    NSLog(@"RSSI : %@", rssi);
+    NSLog(@"txPowerLevel : %f", txPowerLevel);
+    NSLog(@"serviceData : %ld", serviceData);
+    NSLog(@"temperature : %f", temperature);
+    NSLog(@"humidity : %f", humidity);
+    NSLog(@"atmosphericPressure : %f", atmosphericPressure);
+    NSLog(@"isChargingRequired : %@", isChargingRequired ? @"YES" : @"NO");
+    NSLog(@"remainingPercentage : %f", remainingPercentage);
+    NSLog(@"buttonIdentifier : %hi", buttonIdentifier);
+    NSLog(@"isOpen : %@", isOpen ? @"YES" : @"NO");
+    NSLog(@"isHuman : %@", isHuman ? @"YES" : @"NO");
+    NSLog(@"isVibration : %@", isVibration ? @"YES" : @"NO");
+    NSLog(@">>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+};
+
+
+/////////////////////////////////////////////////
+// for Linking Pairing
+- (void)scanStartPairingLinking {
     if (!isScanning) {
         isScanning = YES;
         // デバイス検索の呼び出し
         [bleConnecter scanDevice];
+        NSLog(@"%s scanDevice Pairing", __FUNCTION__);
     } else {
-        isScanning = NO;
-        // デバイス検索を停止する
-        [bleConnecter stopScan];
+        [self scanStopPairingLinking ];
     }
 }
-- (void)setLinkingScanStop {
+- (void)scanStopPairingLinking {
     isScanning = NO;
     // デバイス検索を停止する
     [bleConnecter stopScan];
+    NSLog(@"%s stopScan Pairing",__FUNCTION__);
 }
 
 //デバイス情報の更新
 -(void)updateDeviceArrayByPeripheral:(CBPeripheral *)peripheral{
+    NSLog(@"%s",__FUNCTION__);
     BLEDeviceSetting *foundDevice = [bleConnecter getDeviceByPeripheral:peripheral];
     NSString *uuidStr = foundDevice.peripheral.identifier.UUIDString;
     int index = 0;
@@ -307,7 +524,6 @@
 
 //すでにリストにあるか判定
 -(BOOL)hadInDeviceArray:(NSString *)uuidStr{
-    
     BOOL existed = NO;
     for(BLEDeviceSetting *device in self.deviceArray){
         if([device.peripheral.identifier.UUIDString isEqualToString:uuidStr]){
@@ -318,7 +534,7 @@
     return existed;
 }
 
-#pragma mark - <BLEDelegateModelDelegate> methods
+#pragma mark - <BLEDelegateModelDelegate> methods Pairing Linking
 /**
  　デバイスが発見された際に呼ばれるデリゲート
  
@@ -327,6 +543,7 @@
  @param RSSI 発見したデバイスのRSSI値。接続済みデバイスの場合はnilを返す。
  */
 - (void)didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData RSSI:(NSNumber *)RSSI{
+    NSLog(@"%s UUID: %@", __FUNCTION__, peripheral.identifier.UUIDString);
     //スキャン結果
     if(![self hadInDeviceArray:peripheral.identifier.UUIDString]){
         BLEDeviceSetting *device = [bleConnecter getDeviceByPeripheral:peripheral];
@@ -336,7 +553,6 @@
             [self.mTableView reloadData];
         }
     }
-    
 }
 
 /**
@@ -344,6 +560,7 @@
  @param peripheral 接続したデバイスのペリフェラル
  */
 - (void)didConnectPeripheral:(CBPeripheral *)peripheral{
+    NSLog(@"%s UUID: %@",__FUNCTION__, peripheral.identifier.UUIDString);
     [self updateDeviceArrayByPeripheral:peripheral];
 }
 
@@ -354,10 +571,7 @@
 - (void)didConnectDevice:(BLEDeviceSetting *)setting {
     //接続
     NSString *message = [NSString stringWithFormat:@"%@とペアリングしました",setting.name];
-    NSLog(@"didConnectDevice() %@)",message);
-//    if([self.navigationController.topViewController isKindOfClass:[SearchViewController class]]){
-//        [self ShowInformMessage_showInformWithMessage:message title:nil okActionName:@"OK" handler:nil cancelActionName:nil handler:nil];
-//    }
+    NSLog(@"%s() %@)",__FUNCTION__,message);
 }
 
 /**
@@ -365,6 +579,7 @@
  @param peripheral 切断されたデバイスのペリフェラル
  */
 - (void)didDisconnectPeripheral:(CBPeripheral *)peripheral{
+    NSLog(@"%s() %@",__FUNCTION__, peripheral.name);
     [self updateDeviceArrayByPeripheral:peripheral];
 }
 
@@ -375,10 +590,7 @@
 - (void)didDisconnectDevice:(BLEDeviceSetting *)setting {
     //切断
     NSString *message = [NSString stringWithFormat:@"%@が切断されました",setting.name];
-        NSLog(@"didDisconnectDevice() %@)",message);
-//    if([self.navigationController.topViewController isKindOfClass:[SearchViewController class]]){
-//        [self ShowInformMessage_showInformWithMessage:message title:nil okActionName:@"OK" handler:nil cancelActionName:nil handler:nil];
-//    }
+        NSLog(@"%s() %@)",__FUNCTION__,message);
 }
 
 /**
@@ -388,7 +600,7 @@
  */
 - (void)didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error{
     //接続に失敗した
-    NSLog(@"接続に失敗しました(%@)",peripheral.name);
+    NSLog(@"%s() 接続に失敗しました(%@)",__FUNCTION__,peripheral.name);
 }
 
 /**
@@ -415,6 +627,7 @@
  @param peripheral 受信したデバイスのペリフェラル
  @param data 受信したアドバタイズ情報。接続済みデバイスの場合はnilを返す。
  */
+/*
 - (void)receivedAdvertisement:(CBPeripheral *)peripheral
                 advertisement:(NSDictionary *)data{
     if([[SelectDevice sharedInstance].device.peripheral.identifier.UUIDString isEqualToString:peripheral.identifier.UUIDString]){
@@ -424,7 +637,7 @@
         }
     }
 }
-
+*/
 /**
  　同期状態変更の通知(同期開始)
  @param peripheral 同期開始したデバイスのペリフェラル
@@ -1003,14 +1216,12 @@
  @param peripheral 取得したデバイスのペリフェラル
  */
 - (void)atmosphericPressureDidUpDateDelegate:(CBPeripheral *)peripheral {
-    
 }
 
 /**
  スキャン間隔変更APIの完了通知
  */
 - (void)changePartialScanIntervalSuccessDelegate {
-    
 }
 
 /**
@@ -1018,37 +1229,7 @@
  @param error エラー
  */
 - (void)changePartialScanIntervalError:(NSError *)error {
-    
 }
 
-/**
- ビーコンスキャン開始通知
- */
-- (void)startPartialScanDelegate {
-    NSLog(@"ビーコンスキャン開始通知");
-}
-
-/**
- * ビーコンスキャンのタイムアウトの通知
- */
-- (void)partialScanTimeOutDelegate {
-     NSLog(@"ビーコンスキャンのタイムアウト");
-}
-
-/**
- ビーコンスキャンのBluetooth接続エラー通知
- @param error エラー
- */
-- (void)connectBluetoothWhenPartialScanError:(NSError *)error {
-    NSLog(@"ビーコンスキャンのBluetooth接続エラー通知");
-}
-
-/**
- ビーコンスキャン開始時のBluetooth接続エラー通知
- @param error エラー
- */
-- (void)connectBluetoothWhenStartPartialScanError:(NSError *)error{
-    NSLog(@"ビーコンスキャン開始時のBluetooth接続エラー通知");
-}
-
+#endif //(SURPPORT_LIKING)
 @end

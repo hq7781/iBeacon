@@ -2,7 +2,7 @@
 //  AppDelegate.m
 //  iBeaconPeripheral
 //
-//  Created by HongQuan on 2014/11/17.
+//  Created by Roan Hong on 2017/10/23.
 //  Copyright (c) 2017年 kenkou All rights reserved.
 //
 
